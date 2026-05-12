@@ -19,7 +19,7 @@ env:
   SCUMMVM_CONFIGURE_LIBS: " --enable-a52 --enable-faad --enable-fluidlite --enable-freetype2 --enable-fribidi --enable-gif --enable-gif --enable-jpeg --enable-jpeg --enable-mad --enable-mad --enable-mikmod --enable-mpcdec --enable-mpeg2 --enable-ogg --enable-png --enable-retrowave --enable-theoradec --enable-vorbis --enable-vpx --enable-zlib"
   EMSDK_VERSION: "4.0.15"
   DATA_BASEURL: "https://scummvm-data.kuendig.io"
-  
+
 jobs:
   build-scummvm:
     name: Build ScummVM 🔧
@@ -31,7 +31,7 @@ jobs:
           submodules: true
       - name: Patch Cloud URL 🩹
         run: |
-          grep -rl --include \*.cpp --include \*.js 'cloud.scummvm.org' scummvm/ | xargs sed -i 's/cloud.scummvm.org/scummvm-cloud.kuendig.io/g'  
+          grep -rl --include \*.cpp --include \*.js 'cloud.scummvm.org' scummvm/ | xargs sed -i 's/cloud.scummvm.org/scummvm-cloud.kuendig.io/g'
       - name: Define some cache keys 🗝️
         run: |
           echo "${SCUMMVM_CONFIGURE} ${SCUMMVM_CONFIGURE_LIBS}" > config_vars.txt
@@ -52,29 +52,29 @@ jobs:
         name: Cache configure artifacts 📦
         id: cache-configure
         with:
-          # we need to cache the configure scripts as well so the timestamps are correct and don't cause a re-configure. 
+          # we need to cache the configure scripts as well so the timestamps are correct and don't cause a re-configure.
           path: |
             scummvm/configure
             scummvm/engines.awk
-            scummvm/engines/*/configure.engine 
-            scummvm/config.h 
-            scummvm/config.mk 
-            scummvm/config.log 
-            scummvm/configure.stamp 
-            scummvm/engines/engines.mk 
-            scummvm/engines/detection_table.h 
+            scummvm/engines/*/configure.engine
+            scummvm/config.h
+            scummvm/config.mk
+            scummvm/config.log
+            scummvm/configure.stamp
+            scummvm/engines/engines.mk
+            scummvm/engines/detection_table.h
             scummvm/engines/plugins_table.h
           key: scummvm-configure-${{ env.SCUMMVM_COMMIT}}-${{ hashFiles('config_vars.txt') }}-${{ hashFiles('config_lib_vars.txt') }}
-     
-      - uses: actions/cache@v4 
+
+      - uses: actions/cache@v4
         name: Cache Build artifacts 📦
         id: cache-build
         with:
           path: |
             scummvm/build-emscripten/
-            scummvm/**/lib*.a  
+            scummvm/**/lib*.a
             scummvm/**/*.o
-          key: build-emscripten-${{ env.SCUMMVM_COMMIT}}-${{ hashFiles('config_vars.txt') }}-${{ hashFiles('config_lib_vars.txt') }}
+          key: build-emscripten-${{ env.SCUMMVM_COMMIT }}-${{ hashFiles('config_vars.txt') }}-${{ hashFiles('config_lib_vars.txt') }}
 
       - if: ${{ steps.cache-configure.outputs.cache-hit != 'true' }}
         name: Configure ScummVM
@@ -92,6 +92,7 @@ jobs:
           path: |
             scummvm/build-emscripten/
           key: build-emscripten-${{ github.run_id }}
+
   update-icons:
     name: Update Icons 🎨
     runs-on: ubuntu-latest
@@ -103,19 +104,22 @@ jobs:
       - name: Define  cache keys 🗝️
         run: |
           echo "SCUMMVM_ICONS_COMMIT=$(git rev-parse @:./scummvm-icons)" >> $GITHUB_ENV
-          echo "SCUMMVM_ICONS_COMMIT=${SCUMMVM_ICONS_COMMIT}"  
+          echo "SCUMMVM_ICONS_COMMIT=${SCUMMVM_ICONS_COMMIT}"
       - uses: actions/cache@v4
         id: cache-icons
         with:
-            path: scummvm/build-emscripten/data/gui-icons
-            key: gui-icons-${{ env.SCUMMVM_ICONS_COMMIT }}-${{ hashFiles('assets/metadata.json') }}
+          path: scummvm/build-emscripten/data/gui-icons
+          key: gui-icons-${{ env.SCUMMVM_ICONS_COMMIT }}-${{ hashFiles('assets/metadata.json') }}
       - if: ${{ steps.cache-icons.outputs.cache-hit != 'true' }}
         run: |
           sed -i 's/scummvm\/scummvm-icons/chkuendig\/scummvm-icons/g' scummvm-icons/gen-set.py
           scripts/update-icons.sh
           python3 scummvm/dists/emscripten/build-make_http_index.py scummvm/build-emscripten/data/
+
+  # Runs only when Hostinger secrets are set (forks usually omit these). Not in deploy-demo needs so Pages still runs.
   sync-games:
     name: Sync Games 🎮
+    if: ${{ secrets.HOSTINGER_SSH_HOST != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout  🛎️
@@ -126,19 +130,21 @@ jobs:
         run: |
           scripts/sync-games.sh
         env:
-          SSH_USER:  ${{ secrets.HOSTINGER_SSH_USERNAME }}
-          SSH_PASSWORD:  ${{ secrets.HOSTINGER_SSH_PASSWORD }}
-          SSH_HOST:  ${{ secrets.HOSTINGER_SSH_HOST }}
-          SSH_PORT:  ${{ secrets.HOSTINGER_SSH_PORT }}
-          SSH_PATH:   "/home/${{ secrets.HOSTINGER_SSH_USERNAME }}/domains/scummvm-data.kuendig.io/public_html"
+          SSH_USER: ${{ secrets.HOSTINGER_SSH_USERNAME }}
+          SSH_PASSWORD: ${{ secrets.HOSTINGER_SSH_PASSWORD }}
+          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
+          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+          SSH_PATH: "/home/${{ secrets.HOSTINGER_SSH_USERNAME }}/domains/scummvm-data.kuendig.io/public_html"
       - name: Save Games Metadata
         uses: actions/cache/save@v4
         with:
           path: |
             scummvm/build-emscripten/games.json
           key: games-metadata-${{ github.run_id }}
+
   deploy-cloud:
     name: Deploy Cloud Backend ☁️
+    if: ${{ secrets.HOSTINGER_SSH_HOST != '' && secrets.CLOUD_ENV != '' }}
     runs-on: ubuntu-latest
     needs: []
     steps:
@@ -155,8 +161,8 @@ jobs:
       - name: Create .env file 💾 # encode with echo "$(cat scummvm-cloud/public/.env)"  | base64 -w 0
         run: printf "${{ secrets.CLOUD_ENV }}" | base64 -d > scummvm-cloud/public/.env
       - name: Patch Cloud URL 🩹
-        run: grep -rl --include \*.php 'cloud.scummvm.org' scummvm-cloud/ | xargs sed -i 's/cloud.scummvm.org/scummvm-cloud.kuendig.io/g'  
-      - name: Create .htaccess file 💾 
+        run: grep -rl --include \*.php 'cloud.scummvm.org' scummvm-cloud/ | xargs sed -i 's/cloud.scummvm.org/scummvm-cloud.kuendig.io/g'
+      - name: Create .htaccess file 💾
         run: printf 'RewriteEngine On\nRewriteRule ^(.*)$ ./public/$1 [L]\n' > scummvm-cloud/.htaccess
       - name: Upload to Hostinger ☁️
         uses: appleboy/scp-action@v0.1.7
@@ -172,8 +178,9 @@ jobs:
 
   deploy-demo:
     name: Deploy Demo Page 🚀
+    # sync-games omitted from needs so GitHub Pages deploy still runs on forks without Hostinger secrets.
+    needs: [update-icons, build-scummvm]
     runs-on: ubuntu-latest
-    needs:  [update-icons, sync-games, build-scummvm] # [detect-games, update-icons]
     steps:
       - name: Checkout  🛎️
         uses: actions/checkout@v4
@@ -181,8 +188,8 @@ jobs:
           submodules: true
       - name: Define  cache keys 🗝️
         run: |
-            echo "SCUMMVM_ICONS_COMMIT=$(git rev-parse @:./scummvm-icons)" >> $GITHUB_ENV
-            echo "${DOWNLOAD_GAMES}" > download_games.txt
+          echo "SCUMMVM_ICONS_COMMIT=$(git rev-parse @:./scummvm-icons)" >> $GITHUB_ENV
+          echo "${DOWNLOAD_GAMES}" > download_games.txt
       - name: Restore ScummVM build
         uses: actions/cache/restore@v4
         with:
@@ -194,6 +201,7 @@ jobs:
           path: scummvm/build-emscripten/data/gui-icons
           key: gui-icons-${{ env.SCUMMVM_ICONS_COMMIT }}-${{ hashFiles('assets/metadata.json') }}
       - name: Restore Games Metadata
+        continue-on-error: true
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -211,7 +219,7 @@ jobs:
       #   with:
       #     path: scummvm/build-emscripten/data/games
       #     key: games-${{ hashFiles('download_games.txt') }}
-      - name:  update baseURL
+      - name: update baseURL
         run: |
           jq '.games +=  {"baseUrl":"${{ env.DATA_BASEURL }}"}' scummvm/build-emscripten/data/index.json > scummvm/build-emscripten/data/index.json.tmp && mv scummvm/build-emscripten/data/index.json.tmp scummvm/build-emscripten/data/index.json
       - run: |
@@ -229,6 +237,7 @@ jobs:
           branch: gh-pages # The branch the action should deploy to.
           folder: scummvm/build-emscripten # The folder the action should deploy.
       - name: Upload to Hostinger ☁️
+        if: ${{ secrets.HOSTINGER_SSH_HOST != '' }}
         uses: appleboy/scp-action@v0.1.7
         with:
           source: "scummvm/build-emscripten/*"
